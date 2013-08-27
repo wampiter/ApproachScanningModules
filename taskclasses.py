@@ -89,7 +89,7 @@ class AcOutTask(BaseTask):
     Kwargs:
         sync: synchronize with analog input
     '''
-    def __init__(self, chan, samples, samplerate, sync = False):
+    def __init__(self, channels, samples, samplerate, sync = False):
         if len(channels) < 1:
             logging.error('Channels must be list with at least one channel')
             raise ValueError(len(channels))
