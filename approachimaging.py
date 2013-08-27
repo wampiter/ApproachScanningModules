@@ -21,7 +21,7 @@ def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1),
     
     if len(yvec) > 1 and not len(xvec) > 1:
         logging.error('Cannot have slow but not fast scan vector')
-        return
+        raise ValueError(len(xvec),len(yvec))
         
     reload(approachimagingparams) # in case param has been changed 
     
