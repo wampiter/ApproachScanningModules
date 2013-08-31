@@ -2,6 +2,7 @@ import numpy as np
 import qt
 from approachimagingparams import *
 from taskclasses import *
+from measurement_general import *
 import msvcrt
 
 def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1), 
@@ -25,12 +26,15 @@ def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1),
         
     reload(approachimagingparams) # in case param has been changed 
     
+    #check dimensions of scan
     scanx=False;scany=False
     if len(yvec) > 1:
         scany = True
     if len(xvec) > 1:
         scanx = True
-        
+    
+    #if the measurement is stopped, kill all tasks
+    qt.flow.connect('measurement-end', kill_all_tasks)
     qt.mstart()
     
     #Reset instrument (or initialize if not already)
@@ -38,14 +42,26 @@ def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1),
         daq = qt.instruments.get_instruments_by_type('NI_DAQ')[0]
         daq.reset()
     else:
-        #This reset the device implicitely:
+        #This resets the device implicitely:
         daq = qt.instruments.create('daq', 'NI_DAQ', id = 'Dev1')
     
-    #Check voltage at which z has been left
-    zstart = daq.get_parameters['ao0']['value']
-    if not zstart:
-        daq.set_ao0(0.0)
-        zstart = 0.0        
+    #Store current position of scanner
+    start_position = np.zeros(3)    
+    for i, chan in enumerate(DCCHANS):
+        start_position[i] = daq.get_parameters['ao%i' % chan]['value']
+        if np.isnan(start_position[i]):
+            daq.set('ao%i' % chan, 0.0)
+            start_position[i] = 0.0
+    
+    #if we're not already at the right xy position, lift z and move there:
+    if (abs(start_position[0] - xvec(0)) > 0.001 
+    or abs(start_position[1] - yvec(0)) > 0.001):
+        ramp(daq, 'ao %i' % DCCHANS[2], start_position[2] + Z_LIFT)     
+        ramp(daq, 'ao%i' % DCCHANS[0], xvec[0])
+        ramp(daq, 'ao%i' % DCCHANS[1], yvec[0])
+        ramp(daq, 'ao %i' % DCCHANS[2], start_position[2] + Z_LIFT)
+        
+    
         
     #Prepare approach data structure to store absolutely all raw data:
     approach_data = qt.Data(name='approach_curves')
@@ -99,12 +115,10 @@ def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1),
 
     xvec = np.append(xvec,xvec[::-1])
     #For yscan, add another xval to allow break of 1 appraoch while y moves
-    xvec = np.append(xvec[0],xvec)
+    #xvec = np.append(xvec[0],xvec)
     #This works even for len(xvec)=1 because len(xvec) was doubled.
-    xtask = AcOutTask(1, len(xvec), SAMPLERATE/SAMPLES, sync = True)
-    xtask.set_signal(xvec)
-    
-    ytask = DcOutTask(2)
+    xytask = AcOutTask(1, len(xvec), SAMPLERATE/SAMPLES, sync = True)
+
     ztask = DcOutTask(0)
     
     maintask = mimCalbackTask([4,5], SAMPLES, SAMPLERATE, zstart, feedback)
@@ -118,7 +132,7 @@ def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1),
         try:
             qt.msleep(.5)
         except:
-            logging.warning('Live plotting race condition caused exception.')
+            logging.warning('Live plotting glitch (No big deal)')
     
     print('%i approaches completed' % maintask.callcounter)
     

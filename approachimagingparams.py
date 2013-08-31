@@ -1,5 +1,9 @@
 import numpy as np
 
+#OUTPUT CHANNEL NUMBERS
+DCCHANS = [1,2,0] #list of DC channel numbers [x,y,z]
+ACZCHAN = 3
+
 SAMPLES = 200 #Samples per approach curve
 SAMPLE_RATE = 2.0e4
 AMPLITUDE = 2.5
@@ -19,6 +23,7 @@ Z_STEP = 2.0e-3 # %f User controlled step in non-feedback (approach) mode
 
 Z_MAX = 0.35 #Maximum Z voltage. VERY IMPORTANT TO NOT CRASH TIP
 Z_MIN = 0.0  #Minimum Z voltage. Prevent runaway in other (less bad) direction
+Z_LIFT = 0.01
 
 FAR_FIRST_SAMP = 60 #Defines window for far MIM point
 FAR_LAST_SAMP = 80
@@ -30,7 +35,3 @@ def GenSineWave(elements, amplitude , phase):
     for i in np.arange(elements):
         wave[i] = amplitude * np.sin(phase+(2*np.pi*i/elements))
     return wave
-    
-def movingaverage(interval, window_size):
-    window = np.ones(int(window_size))/float(window_size)
-    return np.convolve(interval, window, 'same')
