@@ -7,8 +7,8 @@ import taskclasses as tc
 import measurement_general as mg
 
 
-def measure(feedback = False, xvec = np.zeros(1), yvec = np.zeros(1), 
-            angle = 0.0, repeat = False):
+def measure(feedback=False, xvec=np.zeros(1), yvec=np.zeros(1), 
+            angle=0.0, repeat=False):
     '''
     Takes an appraoch curve measurement. Aborts with 'q' (or stop)
     in non-feedback, 'u' and 'd' will move stage up and down
@@ -157,79 +157,85 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
     def EveryNCallback(self):
         tc.AnalogInCallbackTask.EveryNCallback(self)      
         if self.callcounter % len(xvec) == 0:
-            yindex = self.callcounter/len(xvec)
-            if yindex >= len(yvec) and not repeat:
+            slowcounter = self.callcounter/len(fastvec)
+            if slowcounter >= len(yvec) and not repeat:
                 self.userin = 'q'
                 print 'Completed scan'
+                self.StopTask()
+                return
             else:
                 #For non-yscan casese the following line will remain yvec[0]
-                self.slow_pos = slowvec[self.callcounter/len(fastvec) % len(slowvec)]
-                ytask.set_voltge(self.y)
-                print('y set to %f volts.' % self.y)
+                self.slow_pos = slowvec[slowcounter % len(slowvec)]
+                print('slow direction set to %f volts.' 
+                      % yvec[slowcounter % len(yvec)])
                 for data_obj in spatial_data:
                     data_obj.new_block()
-        else:
-            cdata = self.data[0:SAMPLES]
-            rdata = self.data[SAMPLES:2*SAMPLES]
-            
-            if self.feedback:
-                #take derivative and smooth:
-                self.datadiff = np.diff(mg.movingaverage(cdata,INNER_WINDOW)) 
-                self.datadiff = mg.movingaverage(self.datadiff,OUTER_WINDOW)
-                self.datadiff[0:OUTER_WINDOW/2]=0 # Zero out data borked by smoothing
-                self.datadiff[len(self.datadiff)-OUTER_WINDOW/2:len(self.datadiff)]=0#..
-                #Sample at which contact occurs            
-                minarg = np.argmin(self.datadif) 
-                
-                #increment z proportional to offset of contact to make negfeedback:
-                if (minarg > LOWER_SAMPLE_THRESHOLD
-                    and minarg < UPPER__SAMPLE_THRESHOLD #ensure minarg in window
-                    and np.amin(self.datad)<MAGNITUDE_THRESHOLD):
-                        self.z += (minarg - CONTACT_SAMPLE)*FEEDBACK_GAIN
-            else: # if not in feedback mode
-                if self.userin == 'u':
-                    self.z += Z_STEP #step up
-                    self.userin = False
-                elif self.userin == 'd':
-                    self.z -= Z_STEP #step down
-                    self.userin = False
-        
-            #Check that Z is within limits
-            if self.z > Z_MAX:
-                self.z = X_MAX
-                logging.error('Reached maximum allowable value')
-            elif self.z < Z_MIN:
-                self.z = Z_MIN
-                logging.error('Reached minimum allowable value')
-        
-            ztask.set_voltage(self.z)
-
-            try:
-                approach_data.add_data_point(arange(SAMPLES),
-                                             xvec[self.callcounter] * 1.0e3\
-                                                 * ones(SAMPLES),
-                                             self.y * 1.0e3 * ones(SAMPLES),
-                                             self.z * 1.0e3 * ones(SAMPLES),
-                                             mimc, mimr)
-                approach_data.new_block()
-            except:
-                logging.warning('Failed to record approach curve')
-            try:
-                mimCabs = np.mean(self.data[FAR_FIRST_SAMP:FAR_LAST_SAMP])\
-                    - np.mean(self.data[CLOSE_FIRST_SAMP:CLOSE_LAST_SAMP])
-                mimRabs = np.mean(self.datar[FAR_FIRST_SAMP:FAR_LAST_SAMP])\
-                    - np.mean(self.datar[CLOSE_FIRST_SAMP:CLOSE_LAST_SAMP])
-                
-                #If we're in the right-going segmet
-                if ((self.callcounter % len(xvec)) - 1) < (len(xvec) - 1) / 2:
-                    spatial_data_current = spatial_data_right
-                else:
-                    spatial_data_current = spatial_data_left
                     
-                spatial_data_current.add_data_point(xvec[self.callcounter] * 1.0e3,
-                                                    self.y * 1.0e3, self.z * 1.0e3,
-                                                    mimCabs, mimRabs)
-            except:
-                logging.warning('Failed to record point data')
+        #separate out channels in most recent trace
+        cdata = self.data[0:SAMPLES]
+        rdata = self.data[SAMPLES:2*SAMPLES]
+        if self.feedback:
+            #take derivative and smooth:
+            self.datadiff = np.diff(mg.movingaverage(cdata,INNER_WINDOW)) 
+            self.datadiff = mg.movingaverage(self.datadiff,OUTER_WINDOW)
+            self.datadiff[0:OUTER_WINDOW/2] = 0 #kill ragged edges
+            self.datadiff[len(self.datadiff) - OUTER_WINDOW/2
+                          : len(self.datadiff)] = 0#..
+            #Sample at which contact occurs            
+            minarg = np.argmin(self.datadif) 
+            #increment z proportional to offset of contact to make negfeedback:
+            if (minarg > LOWER_SAMPLE_THRESHOLD
+                and minarg < UPPER_SAMPLE_THRESHOLD #ensure minarg in window
+                and np.amin(self.datad)<MAGNITUDE_THRESHOLD):
+                    self.z += (minarg - CONTACT_SAMPLE)*FEEDBACK_GAIN
+        else: # if not in feedback mode
+            if self.userin == 'u':
+                self.z += Z_STEP #step up
+                self.userin = False
+            elif self.userin == 'd':
+                self.z -= Z_STEP #step down
+                self.userin = False 
+        #Check that Z is within limits
+        if self.z > Z_MAX:
+            self.z = Z_MAX
+            logging.warning('Reached maximum allowable value: %f' % Z_MAX)
+        elif self.z < Z_MIN:
+            self.z = Z_MIN
+            logging.warning('Reached minimum allowable value: %f' % Z_MIN)
+        #Calculate xy poitionfor ext point
+        fastindex = self.callcounter % len(fastvec)
+        fastpos = fastvec[fastindex]
+        xy = self.fastpos + self.slowpos
+        #Finally, do the deed:
+        xytask.set_voltage(xy)
+        ztask.set_voltage(self.z)
+        
+        #record raw data:
+        try:
+            approach_data.add_data_point(
+                    arange(SAMPLES), xy[0] * 1e3 * ones(SAMPLES), 
+                    xy[1] * 1e3 * ones(SAMPLES), self.z * 1e3 * ones(SAMPLES), 
+                    cdata, rdata)
+            approach_data.new_block()
+        except:
+            logging.warning('Failed to record approach curve')
+        #record processed data:
+        try:
+            mimCabs = np.mean(cdata[FAR_FIRST_SAMP:FAR_LAST_SAMP])\
+                - np.mean(cdata[CLOSE_FIRST_SAMP:CLOSE_LAST_SAMP])
+            mimRabs = np.mean(rdata[FAR_FIRST_SAMP:FAR_LAST_SAMP])\
+                - np.mean(rdata[CLOSE_FIRST_SAMP:CLOSE_LAST_SAMP])
+            
+            #If we're in the right-going segmet
+            if fastindex < len(fastvec)/2
+                spatial_data_current = spatial_data_right
+            else:
+                spatial_data_current = spatial_data_left
+                
+            spatial_data_current.add_data_point(
+                    xvec[self.callcounter] * 1e3, self.y * 1e3, self.z * 1e3,
+                    mimCabs, mimRabs)
+        except:
+            logging.warning('Failed to record processed point data')
             
         self.callcounter += 1

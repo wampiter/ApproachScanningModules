@@ -2,7 +2,7 @@ import qt
 import logging
 import numpy as np
 
-def ramp(instrument, parameter, target_value, valstep = False, timestep = 0.01):
+def ramp(instrument, parameter, target_value, valstep=False, timestep=0.01):
     '''
     Ramps parameter on insrument from its current value to target_value
     one valstep every timestep.
