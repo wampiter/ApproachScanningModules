@@ -108,7 +108,7 @@ def measure(feedback=False, xvec=np.zeros(1), yvec=np.zeros(1),
         slowvec[i] = np.array(
                 [-np.sine(angle) * yvec[i], np.cos(angle) * yvec[i]])
 
-    #Set up tasks
+    #Set up tasks:
     zactask = tc.AcOutTask(3, SAMPLES, SAMPLERATE, sync = True)    
     zacdata = GenSineWave(samples,amplitude,phase)
     zactask.set_signal(zacdata) 
@@ -205,7 +205,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
         #Calculate xy poitionfor ext point
         fastindex = self.callcounter % len(fastvec)
         fastpos = fastvec[fastindex]
-        xy = self.fastpos + self.slowpos
+        xy = fastpos + self.slowpos
         #Finally, do the deed:
         xytask.set_voltage(xy)
         ztask.set_voltage(self.z)
@@ -227,7 +227,7 @@ class mimCallbackTask(tc.AnalogInCallbackTask):
                 - np.mean(rdata[CLOSE_FIRST_SAMP:CLOSE_LAST_SAMP])
             
             #If we're in the right-going segmet
-            if fastindex < len(fastvec)/2
+            if fastindex < len(fastvec)/2:
                 spatial_data_current = spatial_data_right
             else:
                 spatial_data_current = spatial_data_left
